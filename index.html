@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <!-- Etiqueta CRUCIAL para móviles: adapta el tamaño y evita el zoom accidental -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lilyum 3D - Móvil</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0c0a18;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden; /* Evita el scroll vertical y horizontal */
+            touch-action: none; /* Evita que la pantalla se recargue al deslizar el dedo hacia abajo en móviles */
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+</head>
+<body>
+    <script>
+        // Constantes y arrays globales
+        let N_PETALS = 6, PP_PETAL = 1200;
+        let PP_STEM = 1500;
+        let N_LEAVES = 4, PP_LEAF = 700;
+        let N_STAMEN = 6, PP_STAMEN = 100;
+        let N_DIRT = 8000;
+        let N_GRASS = 4500;
+
+        let petals = [], stem = [], leaves = [], stamen = [], dirt = [], grass = [];
+        let stars = [];
+
+        function setup() {
+            // 1. El canvas ahora ocupa el 100% de la pantalla del celular o monitor
+            createCanvas(windowWidth, windowHeight);
+            angleMode(RADIANS);
+            
+            for(let i=0; i<N_PETALS; i++) {
+                petals.push({ u: Array.from({length: PP_PETAL}, () => random()), v: Array.from({length: PP_PETAL}, () => random() * 2 - 1) });
+            }
+            stem = { u: Array.from({length: PP_STEM}, () => random()), v: Array.from({length: PP_STEM}, () => random() * TWO_PI) };
+            
+            for(let i=0; i<N_LEAVES; i++) {
+                leaves.push({ u: Array.from({length: PP_LEAF}, () => random()), v: Array.from({length: PP_LEAF}, () => random() * 2 - 1) });
+            }
+            for(let i=0; i<N_STAMEN; i++) {
+                stamen.push({ u: Array.from({length: PP_STAMEN}, () => random()) });
+            }
+            
+            // Radio dinámico: el monte de tierra siempre será más grande que la pantalla, sea cual sea el dispositivo
+            let max_r = max(windowWidth, windowHeight) * 1.5; 
+            
+            for(let i=0; i<N_DIRT; i++) {
+                let r = max_r * sqrt(random()); 
+                let theta = random() * TWO_PI;
+                let drop = pow(r / max_r, 2.2) * 350; 
+                dirt.push({
+                    x: r * cos(theta), z: r * sin(theta), y: drop + random(-5, 12),
+                    c: color(random(30, 75), random(20, 50), random(15, 30))
+                });
+            }
+
+            for(let i=0; i<N_GRASS; i++) {
+                let r = (max_r * 0.85) * sqrt(random());
+                let theta = random() * TWO_PI;
+                let drop = pow(r / max_r, 2.2) * 350; 
+                grass.push({
+                    x: r * cos(theta), z: r * sin(theta), y: drop - random(5, 15),
+                    c: color(random(30, 70), random(110, 180), random(30, 70))
+                });
+            }
+            
+            for(let i=0; i<150; i++) {
+                // Posicionar estrellas usando el tamaño del dispositivo
+                stars.push({ x: random(windowWidth), y: random(windowHeight), phase: random(1) });
+            }
+        }
+
+        // 2. Función nativa que detecta si rotas el celular o cambias el tamaño de la ventana
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+
+        function smoothStep(x) {
+            x = constrain(x, 0, 1);
+            return x * x * (3 - 2 * x);
+        }
+
+        function project3D(x, y, z, baseFov=500, viewerDist=800) {
+            // 3. FACTOR DE ESCALA: Compara la pantalla actual con un estándar de 800px
+            // Si el móvil mide 400px de ancho, la flor se reduce automáticamente a la mitad (0.5x)
+            let scaleFactor = min(width, height) / 800; 
+            
+            let fov = baseFov * scaleFactor;
+            let factor = fov / (viewerDist + z);
+            
+            let x2d = x * factor + width / 2;
+            let y2d = y * factor + height / 2 + (150 * scaleFactor); 
+            return {x: x2d, y: y2d, size: factor, z: z};
+        }
+
+        function draw() {
+            background(12, 10, 24);
+            let time_t = millis() / 1000.0;
+            let cycle = (time_t % 12) / 12.0;
+            
+            let g_val = 0, bloom = 0;
+            if (cycle < 0.2) { g_val = cycle / 0.2; bloom = 0; } 
+            else if (cycle < 0.4) { g_val = 1; bloom = (cycle - 0.2) / 0.2; } 
+            else if (cycle < 0.8) { g_val = 1; bloom = 1; } 
+            else { g_val = 1 - (cycle - 0.8) / 0.2; bloom = 1 - (cycle - 0.8) / 0.2; }
+            
+            g_val = smoothStep(g_val);
+            bloom = smoothStep(bloom);
+            
+            // Estrellas adaptables al giro del celular
+            strokeWeight(2);
+            for(let s of stars) {
+                let b = int(127 + 128 * sin(time_t * 3 + s.phase * 10));
+                stroke(b);
+                point(s.x % width, s.y % height);
+            }
+            
+            // Aros de fondo redimensionados para móvil
+            let scaleFactor = min(width, height) / 800;
+            noFill();
+            strokeWeight(1);
+            stroke(30, 25, 45);
+            circle(width/2, height/2 - 50 * scaleFactor, 600 * scaleFactor);
+            circle(width/2, height/2 + 50 * scaleFactor, 400 * scaleFactor);
+            circle(width/2 - 120 * scaleFactor, height/2 - 20 * scaleFactor, 360 * scaleFactor);
+            circle(width/2 + 120 * scaleFactor, height/2 - 20 * scaleFactor, 360 * scaleFactor);
+            
+            let angle = time_t * 0.4;
+            let cos_a = cos(angle), sin_a = sin(angle);
+            
+            let pointsToDraw = [];
+            
+            for(let i=0; i<N_DIRT; i++) {
+                let dx = dirt[i].x, dz = dirt[i].z;
+                let rx = dx * cos_a - dz * sin_a, rz = dx * sin_a + dz * cos_a;
+                pointsToDraw.push({x: rx, y: dirt[i].y, z: rz, c: dirt[i].c, s: 4.5});
+            }
+
+            for(let i=0; i<N_GRASS; i++) {
+                let gx = grass[i].x, gz = grass[i].z;
+                let rx = gx * cos_a - gz * sin_a, rz = gx * sin_a + gz * cos_a;
+                pointsToDraw.push({x: rx, y: grass[i].y, z: rz, c: grass[i].c, s: 3.5});
+            }
+
+            let stem_h = 400 * g_val;
+            for(let i=0; i<PP_STEM; i++) {
+                let sz = stem_h * stem.u[i];
+                if (sz <= stem_h) {
+                    let radius = 6 * (1 - sz/400) + 2;
+                    let sx = radius * cos(stem.v[i]), sy = -sz, sz_3d = radius * sin(stem.v[i]);
+                    let rx = sx * cos_a - sz_3d * sin_a, rz = sx * sin_a + sz_3d * cos_a;
+                    pointsToDraw.push({x: rx, y: sy, z: rz, c: color(50, 180 - sz*0.2, 80), s: 2.5});
+                }
+            }
+            
+            let leaf_heights = [80, 160, 240, 300];
+            let leaf_angles = [0, PI, PI/2, -PI/2];
+            for(let i=0; i<N_LEAVES; i++) {
+                let lh = leaf_heights[i];
+                if (stem_h > lh) {
+                    let lg = smoothStep(min(1.0, (stem_h - lh) / 80.0));
+                    for(let j=0; j<PP_LEAF; j++) {
+                        let lu = leaves[i].u[j], lv = leaves[i].v[j];
+                        let l_len = 160 * lg, lx = lu * l_len, lw = 45 * sin(lu * PI) * lg * lv;
+                        let ly = -lu * lu * 50 * lg, lz = lw;
+                        let la = leaf_angles[i], lc = cos(la), ls = sin(la);
+                        let rlx = lx * lc - lz * ls, rlz = lx * ls + lz * lc, rly = -lh + ly;
+                        let glx = rlx * cos_a - rlz * sin_a, glz = rlx * sin_a + rlz * cos_a;
+                        pointsToDraw.push({x: glx, y: rly, z: glz, c: color(40, 170, 70), s: 2});
+                    }
+                }
+            }
+            
+            let tilt = 0.4 * bloom;
+            let tc = cos(tilt), ts = sin(tilt);
+            
+            if (stem_h > 380) {
+                for(let i=0; i<N_PETALS; i++) {
+                    for(let j=0; j<PP_PETAL; j++) {
+                        let pu = petals[i].u[j], pv = petals[i].v[j];
+                        let p_len = 240, p_width = 75 * sin(pu * PI) * (1 - pu * 0.2);
+                        let bend = sin(pu * PI * 0.6) * 140 * bloom;
+                        let px = p_width * pv, py = -pu * p_len + (pu*pu) * bend * 0.6, pz = -bend;
+                        let pa = i * (TWO_PI / N_PETALS), pc = cos(pa), ps = sin(pa);
+                        let rpx = px * pc - pz * ps, rpz = px * ps + pz * pc;
+                        let tpy = py * tc - rpz * ts, tpz = py * ts + rpz * tc, final_y = tpy - 390;
+                        let gpx = rpx * cos_a - tpz * sin_a, gpz = rpx * sin_a + tpz * cos_a;
+                        let r_col = int(240 + 15 * pu), g_col = int(50 + 80 * (1 - pu)), b_col = int(160 + 90 * pu);
+                        pointsToDraw.push({x: gpx, y: final_y, z: gpz, c: color(r_col, g_col, b_col), s: 2.2});
+                    }
+                }
+            }
+            
+            if (bloom > 0.4) {
+                for(let i=0; i<N_STAMEN; i++) {
+                    for(let j=0; j<PP_STAMEN; j++) {
+                        let su = stamen[i].u[j], s_len = 110 * bloom, bend = 40 * bloom;
+                        let sx = 0, sy = -su * s_len, sz = (su*su) * bend;
+                        let sa = i * (TWO_PI / N_STAMEN) + (PI / N_STAMEN), sc = cos(sa), ss = sin(sa);
+                        let rsx = sx * sc - sz * ss, rsz = sx * ss + sz * sc;
+                        let tsy = sy * tc - rsz * ts, tsz = sy * ts + rsz * tc, final_sy = tsy - 390;
+                        let gsx = rsx * cos_a - tsz * sin_a, gsz = rsx * sin_a + tsz * cos_a;
+                        let is_tip = su > 0.95, c = is_tip ? color(255, 220, 50) : color(180, 255, 100);
+                        let s = is_tip ? 4.5 : 2;
+                        pointsToDraw.push({x: gsx, y: final_sy, z: gsz, c: c, s: s});
+                    }
+                }
+            }
+            
+            pointsToDraw.sort((a, b) => b.z - a.z);
+            
+            noStroke();
+            for(let p of pointsToDraw) {
+                let proj = project3D(p.x, p.y, p.z);
+                fill(p.c);
+                let final_size = max(0.5, p.s * proj.size); 
+                circle(proj.x, proj.y, final_size);
+            }
+        }
+    </script>
+</body>
+</html>
