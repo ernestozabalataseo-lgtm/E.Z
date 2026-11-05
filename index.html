@@ -2,7 +2,6 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <!-- Etiqueta CRUCIAL para móviles: adapta el tamaño y evita el zoom accidental -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>❤️</title>
     <style>
@@ -13,8 +12,8 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            overflow: hidden; /* Evita el scroll vertical y horizontal */
-            touch-action: none; /* Evita que la pantalla se recargue al deslizar el dedo hacia abajo en móviles */
+            overflow: hidden;
+            touch-action: none;
         }
         canvas {
             display: block;
@@ -24,21 +23,39 @@
 </head>
 <body>
     <script>
-        // Constantes y arrays globales
-        let N_PETALS = 6, PP_PETAL = 1200;
-        let PP_STEM = 1500;
-        let N_LEAVES = 4, PP_LEAF = 700;
-        let N_STAMEN = 6, PP_STAMEN = 100;
-        let N_DIRT = 8000;
-        let N_GRASS = 4500;
+        // Variables globales
+        let N_PETALS = 6, PP_PETAL;
+        let PP_STEM;
+        let N_LEAVES = 4, PP_LEAF;
+        let N_STAMEN = 6, PP_STAMEN;
+        let N_DIRT, N_GRASS;
+        let isMobile = false;
 
         let petals = [], stem = [], leaves = [], stamen = [], dirt = [], grass = [];
         let stars = [];
 
         function setup() {
-            // 1. El canvas ahora ocupa el 100% de la pantalla del celular o monitor
             createCanvas(windowWidth, windowHeight);
             angleMode(RADIANS);
+            
+            // DETECTOR MÓVIL: Si la pantalla es menor a 768px, bajamos la calidad para ganar fluidez
+            isMobile = width < 768;
+            
+            if (isMobile) {
+                PP_PETAL = 500;    // Antes 1200
+                PP_STEM = 600;     // Antes 1500
+                PP_LEAF = 300;     // Antes 700
+                PP_STAMEN = 50;    // Antes 100
+                N_DIRT = 2500;     // Antes 8000
+                N_GRASS = 1200;    // Antes 4500
+            } else {
+                PP_PETAL = 1200;
+                PP_STEM = 1500;
+                PP_LEAF = 700;
+                PP_STAMEN = 100;
+                N_DIRT = 8000;
+                N_GRASS = 4500;
+            }
             
             for(let i=0; i<N_PETALS; i++) {
                 petals.push({ u: Array.from({length: PP_PETAL}, () => random()), v: Array.from({length: PP_PETAL}, () => random() * 2 - 1) });
@@ -52,7 +69,6 @@
                 stamen.push({ u: Array.from({length: PP_STAMEN}, () => random()) });
             }
             
-            // Radio dinámico: el monte de tierra siempre será más grande que la pantalla, sea cual sea el dispositivo
             let max_r = max(windowWidth, windowHeight) * 1.5; 
             
             for(let i=0; i<N_DIRT; i++) {
@@ -75,13 +91,12 @@
                 });
             }
             
-            for(let i=0; i<150; i++) {
-                // Posicionar estrellas usando el tamaño del dispositivo
+            let numStars = isMobile ? 60 : 150; // Menos estrellas en móvil
+            for(let i=0; i<numStars; i++) {
                 stars.push({ x: random(windowWidth), y: random(windowHeight), phase: random(1) });
             }
         }
 
-        // 2. Función nativa que detecta si rotas el celular o cambias el tamaño de la ventana
         function windowResized() {
             resizeCanvas(windowWidth, windowHeight);
         }
@@ -92,13 +107,9 @@
         }
 
         function project3D(x, y, z, baseFov=500, viewerDist=800) {
-            // 3. FACTOR DE ESCALA: Compara la pantalla actual con un estándar de 800px
-            // Si el móvil mide 400px de ancho, la flor se reduce automáticamente a la mitad (0.5x)
             let scaleFactor = min(width, height) / 800; 
-            
             let fov = baseFov * scaleFactor;
             let factor = fov / (viewerDist + z);
-            
             let x2d = x * factor + width / 2;
             let y2d = y * factor + height / 2 + (150 * scaleFactor); 
             return {x: x2d, y: y2d, size: factor, z: z};
@@ -118,15 +129,13 @@
             g_val = smoothStep(g_val);
             bloom = smoothStep(bloom);
             
-            // Estrellas adaptables al giro del celular
-            strokeWeight(2);
+            strokeWeight(isMobile ? 3 : 2); // Estrellas más notorias en móvil
             for(let s of stars) {
                 let b = int(127 + 128 * sin(time_t * 3 + s.phase * 10));
                 stroke(b);
                 point(s.x % width, s.y % height);
             }
             
-            // Aros de fondo redimensionados para móvil
             let scaleFactor = min(width, height) / 800;
             noFill();
             strokeWeight(1);
@@ -225,6 +234,8 @@
                 let proj = project3D(p.x, p.y, p.z);
                 fill(p.c);
                 let final_size = max(0.5, p.s * proj.size); 
+                // En móvil las partículas se hacen un poco más grandes para cubrir el espacio
+                if (isMobile) final_size *= 1.8; 
                 circle(proj.x, proj.y, final_size);
             }
         }
